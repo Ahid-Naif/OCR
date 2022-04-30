@@ -70,6 +70,8 @@ ap.add_argument("-p", "--padding", type=float, default=0.0,
     help="amount of padding to add to each border of ROI")
 args = vars(ap.parse_args())
 
+isOCR = ''
+
 # define the two output layer names for the EAST detector model that
 # we are interested in -- the first is the output probabilities and the
 # second can be used to derive the bounding box coordinates of text
@@ -95,9 +97,9 @@ while True:
         print("Can't receive frames")
         break
 
-    cv2.imshow("OCR", frame)
-    if cv2.waitKey(1) == ord('q'):
-        break
+   # cv2.imshow("OCR", frame)
+    # if cv2.waitKey(1) == ord('q'):
+    #     break
     
     # Our operations on the frame come here
     orig = frame.copy()
@@ -123,43 +125,54 @@ while True:
     boxes = non_max_suppression(np.array(rects), probs=confidences)
     print(type(boxes))
     if(not isinstance(boxes, list)):
-        print(boxes)
-    else:
-        print('no results')
+        box = np.array(
+        [np.amin(boxes, axis=0)[0], np.amin(boxes, axis=0)[1], 
+        np.amax(boxes, axis=0)[2], np.amax(boxes, axis=0)[3]]
+        )
+
+        # initialize the list of results
+        results = []
+        # loop over the bounding boxes
+        startX, startY, endX, endY = box
+        # scale the bounding box coordinates based on the respective
+        # ratios
+        startX = int(startX * rW)
+        startY = int(startY * rH)
+        endX = int(endX * rW)
+        endY = int(endY * rH)
+        # in order to obtain a better OCR of the text we can potentially
+        # apply a bit of padding surrounding the bounding box -- here we
+        # are computing the deltas in both the x and y directions
+        dX = int((endX - startX) * args["padding"])
+        dY = int((endY - startY) * args["padding"])
+        # apply padding to each side of the bounding box, respectively
+        startX = max(0, startX - dX)
+        startY = max(0, startY - dY)
+        endX = min(origW, endX + (dX * 2))
+        endY = min(origH, endY + (dY * 2))
     
-## start
-# box = np.array(
-#         [np.amin(boxes, axis=0)[0], np.amin(boxes, axis=0)[1], 
-#         np.amax(boxes, axis=0)[2], np.amax(boxes, axis=0)[3]]
-#         )
-# # initialize the list of results
-# results = []
-# # loop over the bounding boxes
-# startX, startY, endX, endY = box
-# # scale the bounding box coordinates based on the respective
-# # ratios
-# startX = int(startX * rW)
-# startY = int(startY * rH)
-# endX = int(endX * rW)
-# endY = int(endY * rH)
-# # in order to obtain a better OCR of the text we can potentially
-# # apply a bit of padding surrounding the bounding box -- here we
-# # are computing the deltas in both the x and y directions
-# dX = int((endX - startX) * args["padding"])
-# dY = int((endY - startY) * args["padding"])
-# # apply padding to each side of the bounding box, respectively
-# startX = max(0, startX - dX)
-# startY = max(0, startY - dY)
-# endX = min(origW, endX + (dX * 2))
-# endY = min(origH, endY + (dY * 2))
-##end
     output = orig.copy()
-    # cv2.rectangle(output, (startX, startY), (endX, endY),
-    # 	(0, 0, 255), 2)
-    # show the output image
-    cv2.imshow("OCR", output)
-    if cv2.waitKey(1) == ord('q'):
-        break
+    print(isOCR)
+    if(not isinstance(boxes, list)):
+        if isOCR == False:
+            cv2.destroyWindow('Video')
+        
+        cv2.rectangle(output, (startX, startY), (endX, endY),
+        	(0, 0, 255), 2)
+        cv2.imshow('OCR', output)
+        if cv2.waitKey(1) == ord('q'):
+            break
+        isOCR = True
+
+    else:
+        if isOCR == True:
+            cv2.destroyWindow('OCR')
+        
+        # show the output image
+        cv2.imshow("Video", output)
+        if cv2.waitKey(1) == ord('q'):
+            break
+        isOCR = False
 
 # extract the actual padded ROI
 roi = orig[startY:endY, startX:endX]
